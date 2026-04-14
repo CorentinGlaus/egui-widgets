@@ -10,6 +10,9 @@
         packages = with pkgs; [
           rustc
           cargo
+          gcc
+          pkg-config
+          libxkbcommon
         ];
       };
     };
