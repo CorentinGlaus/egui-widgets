@@ -6,6 +6,7 @@ use smithay_client_toolkit::{
     output::OutputState,
     reexports::client::{Connection, globals::registry_queue_init},
     registry::RegistryState,
+    seat::SeatState,
     shell::{
         WaylandSurface,
         wlr_layer::{Anchor, Layer, LayerShell},
@@ -15,7 +16,7 @@ use smithay_client_toolkit::{
 
 use crate::{
     app::{App, builder::AppBuilder},
-    widget::TopBar,
+    widget::{Widget, top_bar::TopBar},
 };
 
 fn main() {
@@ -29,6 +30,8 @@ fn main() {
     let compositor_state = CompositorState::bind(&globals, &qh).expect("Compositor not available");
 
     let layer_shell = LayerShell::bind(&globals, &qh).expect("Layer shell not available");
+
+    let seat_state = SeatState::new(&globals, &qh);
 
     let shm = Shm::bind(&globals, &qh).expect("Shm not available");
 
@@ -55,6 +58,7 @@ fn main() {
         buffer: None,
         width: 0,
         height: 0,
+        hovered: false,
     };
 
     let mut app = AppBuilder::new(
@@ -62,6 +66,7 @@ fn main() {
         compositor_state,
         OutputState::new(&globals, &qh),
         layer_shell,
+        seat_state,
         shm,
         pool,
     )

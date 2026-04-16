@@ -2,7 +2,8 @@ pub mod builder;
 
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_shm,
+    delegate_compositor, delegate_layer, delegate_output, delegate_pointer, delegate_registry,
+    delegate_seat, delegate_shm,
     output::{OutputHandler, OutputState},
     reexports::client::{
         Connection, QueueHandle,
@@ -10,6 +11,10 @@ use smithay_client_toolkit::{
     },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
+    seat::{
+        Capability, SeatHandler, SeatState,
+        pointer::{PointerEvent, PointerHandler},
+    },
     shell::{
         WaylandSurface,
         wlr_layer::{LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
@@ -25,6 +30,7 @@ pub struct App {
     pub output_state: OutputState,
     pub shm: Shm,
     pub layer_shell: LayerShell,
+    pub seat_state: SeatState,
 
     pub pool: SlotPool,
 
@@ -161,8 +167,74 @@ impl ProvidesRegistryState for App {
     registry_handlers![OutputState];
 }
 
+impl SeatHandler for App {
+    fn seat_state(&mut self) -> &mut SeatState {
+        &mut self.seat_state
+    }
+
+    fn new_seat(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _seat: smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat,
+    ) {
+    }
+
+    fn new_capability(
+        &mut self,
+        _conn: &Connection,
+        qh: &QueueHandle<Self>,
+        seat: smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat,
+        capability: smithay_client_toolkit::seat::Capability,
+    ) {
+        if capability == Capability::Pointer {
+            _ = self
+                .seat_state
+                .get_pointer(qh, &seat)
+                .expect("Failed to get pointer");
+        }
+    }
+
+    fn remove_capability(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _seat: smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat,
+        _capability: smithay_client_toolkit::seat::Capability,
+    ) {
+    }
+
+    fn remove_seat(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _seat: smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat,
+    ) {
+    }
+}
+
+impl PointerHandler for App {
+    fn pointer_frame(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _pointer: &smithay_client_toolkit::reexports::client::protocol::wl_pointer::WlPointer,
+        events: &[PointerEvent],
+    ) {
+        for event in events {
+            if let Some(widget) = Self::find_widget(&mut self.widgets, &event.surface) {
+                if widget.handle_pointer_event(event) {
+                    widget.draw(&mut self.pool);
+                }
+            }
+        }
+    }
+}
+
 delegate_compositor!(App);
 delegate_layer!(App);
 delegate_output!(App);
 delegate_registry!(App);
 delegate_shm!(App);
+delegate_pointer!(App);
+delegate_seat!(App);

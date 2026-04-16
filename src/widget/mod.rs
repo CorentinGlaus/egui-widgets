@@ -1,5 +1,8 @@
+pub mod top_bar;
+
 use smithay_client_toolkit::{
     reexports::client::protocol::wl_shm,
+    seat::pointer::{PointerEvent, PointerEventKind},
     shell::{WaylandSurface, wlr_layer::LayerSurface},
     shm::slot::{Buffer, SlotPool},
 };
@@ -9,6 +12,9 @@ pub trait Widget {
     fn size(&self) -> (u32, u32);
     fn set_size(&mut self, width: u32, height: u32);
     fn render(&self, canvas: &mut [u8]);
+
+    /// Handles a pointer event and returns whether a redraw is needed.
+    fn handle_pointer_event(&mut self, pointer_event: &PointerEvent) -> bool;
 
     fn draw(&mut self, pool: &mut SlotPool) {
         let (width, height) = self.size();
@@ -40,39 +46,4 @@ pub trait Widget {
     }
 
     fn store_buffer(&mut self, buffer: Buffer);
-}
-
-pub struct TopBar {
-    pub layer_surface: LayerSurface,
-    pub buffer: Option<Buffer>,
-    pub width: u32,
-    pub height: u32,
-}
-
-impl Widget for TopBar {
-    fn layer_surface(&self) -> &LayerSurface {
-        &self.layer_surface
-    }
-
-    fn size(&self) -> (u32, u32) {
-        (self.width, self.height)
-    }
-
-    fn set_size(&mut self, width: u32, height: u32) {
-        self.width = width;
-        self.height = height;
-    }
-
-    fn render(&self, canvas: &mut [u8]) {
-        for pixel in canvas.chunks_exact_mut(4) {
-            pixel[0] = 180;
-            pixel[1] = 180;
-            pixel[2] = 0;
-            pixel[3] = 255;
-        }
-    }
-
-    fn store_buffer(&mut self, buffer: Buffer) {
-        self.buffer = Some(buffer);
-    }
 }
