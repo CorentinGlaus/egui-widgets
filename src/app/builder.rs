@@ -2,14 +2,11 @@ use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
     registry::RegistryState,
-    shell::wlr_layer::{LayerShell, LayerSurface},
-    shm::{
-        Shm,
-        slot::{Buffer, SlotPool},
-    },
+    shell::wlr_layer::LayerShell,
+    shm::{Shm, slot::SlotPool},
 };
 
-use crate::app::App;
+use crate::{app::App, widget::Widget};
 
 pub struct AppBuilder {
     pub registry_state: RegistryState,
@@ -18,13 +15,9 @@ pub struct AppBuilder {
     pub layer_shell: LayerShell,
     pub shm: Shm,
 
-    pub layer_surface: Option<LayerSurface>,
-    pub buffer: Option<Buffer>,
+    pub widgets: Vec<Box<dyn Widget>>,
     pub pool: SlotPool,
 
-    pub width: u32,
-    pub height: u32,
-    pub configured: bool,
     pub should_exit: bool,
 }
 
@@ -43,18 +36,14 @@ impl AppBuilder {
             output_state,
             layer_shell,
             shm,
-            layer_surface: None,
-            buffer: None,
+            widgets: Vec::new(),
             pool: slot_pool,
-            width: 0,
-            height: 0,
-            configured: false,
             should_exit: false,
         }
     }
 
-    pub fn layer_surface(mut self, layer_surface: Option<LayerSurface>) -> AppBuilder {
-        self.layer_surface = layer_surface;
+    pub fn add_widget(mut self, widget: Box<dyn Widget>) -> AppBuilder {
+        self.widgets.push(widget);
         self
     }
 
@@ -65,12 +54,8 @@ impl AppBuilder {
             output_state: self.output_state,
             layer_shell: self.layer_shell,
             shm: self.shm,
-            layer_surface: self.layer_surface,
-            buffer: self.buffer,
+            widgets: self.widgets,
             pool: self.pool,
-            width: self.width,
-            height: self.height,
-            configured: self.configured,
             should_exit: self.should_exit,
         }
     }

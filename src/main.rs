@@ -1,4 +1,5 @@
 mod app;
+mod widget;
 
 use smithay_client_toolkit::{
     compositor::CompositorState,
@@ -12,7 +13,10 @@ use smithay_client_toolkit::{
     shm::{Shm, slot::SlotPool},
 };
 
-use crate::app::{App, builder::AppBuilder};
+use crate::{
+    app::{App, builder::AppBuilder},
+    widget::TopBar,
+};
 
 fn main() {
     let conn = Connection::connect_to_env().expect("Failed to connect to Wayland");
@@ -46,6 +50,13 @@ fn main() {
 
     layer_surface.commit();
 
+    let top_bar = TopBar {
+        layer_surface: layer_surface,
+        buffer: None,
+        width: 0,
+        height: 0,
+    };
+
     let mut app = AppBuilder::new(
         RegistryState::new(&globals),
         compositor_state,
@@ -54,7 +65,7 @@ fn main() {
         shm,
         pool,
     )
-    .layer_surface(Some(layer_surface))
+    .add_widget(Box::new(top_bar))
     .build();
 
     while !app.should_exit {

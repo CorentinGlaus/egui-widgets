@@ -6,7 +6,7 @@ use smithay_client_toolkit::{
     output::{OutputHandler, OutputState},
     reexports::client::{
         Connection, QueueHandle,
-        protocol::{wl_output, wl_shm, wl_surface},
+        protocol::{wl_output, wl_surface},
     },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
@@ -14,11 +14,10 @@ use smithay_client_toolkit::{
         WaylandSurface,
         wlr_layer::{LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
     },
-    shm::{
-        Shm, ShmHandler,
-        slot::{Buffer, SlotPool},
-    },
+    shm::{Shm, ShmHandler, slot::SlotPool},
 };
+
+use crate::widget::Widget;
 
 pub struct App {
     pub registry_state: RegistryState,
@@ -27,52 +26,24 @@ pub struct App {
     pub shm: Shm,
     pub layer_shell: LayerShell,
 
-    pub layer_surface: Option<LayerSurface>,
-    pub buffer: Option<Buffer>,
     pub pool: SlotPool,
 
-    pub width: u32,
-    pub height: u32,
-    pub configured: bool,
+    pub widgets: Vec<Box<dyn Widget>>,
+
     pub should_exit: bool,
 }
 
 impl App {
-    fn draw(&mut self, _qh: &QueueHandle<App>) {
-        if !self.configured {
-            return;
+    fn find_widget<'a>(
+        widgets: &'a mut Vec<Box<dyn Widget>>,
+        layer_surface: &wl_surface::WlSurface,
+    ) -> Option<&'a mut dyn Widget> {
+        for widget in widgets {
+            if layer_surface == widget.layer_surface().wl_surface() {
+                return Some(widget.as_mut());
+            }
         }
-
-        let surface = self.layer_surface.as_ref().unwrap();
-        let width = self.width;
-        let height = self.height;
-
-        // bytes per row, ARGB -> 4
-        let stride = width * 4;
-        let (buffer, canvas) = self
-            .pool
-            .create_buffer(
-                width as i32,
-                height as i32,
-                stride as i32,
-                wl_shm::Format::Argb8888,
-            )
-            .expect("Failed to create buffer");
-
-        for pixel in canvas.chunks_exact_mut(4) {
-            pixel[0] = 180;
-            pixel[1] = 180;
-            pixel[2] = 0;
-            pixel[3] = 255;
-        }
-
-        let wl_surface = surface.wl_surface();
-
-        wl_surface.attach(Some(&buffer.wl_buffer()), 0, 0);
-        wl_surface.damage_buffer(0, 0, width as i32, height as i32);
-        wl_surface.commit();
-
-        self.buffer = Some(buffer);
+        None
     }
 }
 
@@ -84,16 +55,15 @@ impl LayerShellHandler for App {
     fn configure(
         &mut self,
         _conn: &Connection,
-        qh: &QueueHandle<Self>,
-        _layer: &LayerSurface,
+        _qh: &QueueHandle<Self>,
+        layer_surface: &LayerSurface,
         configure: LayerSurfaceConfigure,
         _serial: u32,
     ) {
-        self.width = configure.new_size.0;
-        self.height = configure.new_size.1;
-        self.configured = true;
-
-        self.draw(qh);
+        if let Some(widget) = Self::find_widget(&mut self.widgets, layer_surface.wl_surface()) {
+            widget.set_size(configure.new_size.0, configure.new_size.1);
+            widget.draw(&mut self.pool);
+        }
     }
 }
 
@@ -119,11 +89,13 @@ impl CompositorHandler for App {
     fn frame(
         &mut self,
         _conn: &Connection,
-        qh: &QueueHandle<Self>,
-        _surface: &wl_surface::WlSurface,
+        _qh: &QueueHandle<Self>,
+        layer_surface: &wl_surface::WlSurface,
         _time: u32,
     ) {
-        self.draw(qh);
+        if let Some(widget) = Self::find_widget(&mut self.widgets, layer_surface) {
+            widget.draw(&mut self.pool);
+        }
     }
 
     fn surface_enter(
