@@ -2,8 +2,8 @@ pub mod builder;
 
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_layer, delegate_output, delegate_pointer, delegate_registry,
-    delegate_seat, delegate_shm,
+    delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
+    delegate_registry, delegate_seat, delegate_shm,
     output::{OutputHandler, OutputState},
     reexports::client::{
         Connection, QueueHandle,
@@ -13,6 +13,7 @@ use smithay_client_toolkit::{
     registry_handlers,
     seat::{
         Capability, SeatHandler, SeatState,
+        keyboard::KeyboardHandler,
         pointer::{PointerEvent, PointerHandler},
     },
     shell::{
@@ -192,6 +193,11 @@ impl SeatHandler for App {
                 .seat_state
                 .get_pointer(qh, &seat)
                 .expect("Failed to get pointer");
+        } else if capability == Capability::Keyboard {
+            _ = self
+                .seat_state
+                .get_keyboard(qh, &seat, None)
+                .expect("Failed to get keyboard");
         }
     }
 
@@ -231,6 +237,77 @@ impl PointerHandler for App {
     }
 }
 
+impl KeyboardHandler for App {
+    fn enter(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _surface: &wl_surface::WlSurface,
+        _serial: u32,
+        _raw: &[u32],
+        _keysyms: &[smithay_client_toolkit::seat::keyboard::Keysym],
+    ) {
+        println!("Focus keyboard entered");
+    }
+
+    fn leave(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _surface: &wl_surface::WlSurface,
+        _serial: u32,
+    ) {
+        println!("Focus keyboard left");
+    }
+
+    fn press_key(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _serial: u32,
+        event: smithay_client_toolkit::seat::keyboard::KeyEvent,
+    ) {
+        println!("Key pressed: {:?}, utf8: {:?}", event.keysym, event.utf8);
+    }
+
+    fn repeat_key(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _serial: u32,
+        _event: smithay_client_toolkit::seat::keyboard::KeyEvent,
+    ) {
+    }
+
+    fn release_key(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _serial: u32,
+        event: smithay_client_toolkit::seat::keyboard::KeyEvent,
+    ) {
+        println!("Key released: {:?}, utf8: {:?}", event.keysym, event.utf8);
+    }
+
+    fn update_modifiers(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _serial: u32,
+        modifiers: smithay_client_toolkit::seat::keyboard::Modifiers,
+        _raw_modifiers: smithay_client_toolkit::seat::keyboard::RawModifiers,
+        _layout: u32,
+    ) {
+        println!("Modifiers: {:?}", modifiers);
+    }
+}
+
 delegate_compositor!(App);
 delegate_layer!(App);
 delegate_output!(App);
@@ -238,3 +315,4 @@ delegate_registry!(App);
 delegate_shm!(App);
 delegate_pointer!(App);
 delegate_seat!(App);
+delegate_keyboard!(App);

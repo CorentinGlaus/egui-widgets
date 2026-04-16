@@ -2,7 +2,7 @@ pub mod top_bar;
 
 use smithay_client_toolkit::{
     reexports::client::protocol::wl_shm,
-    seat::pointer::{PointerEvent, PointerEventKind},
+    seat::pointer::PointerEvent,
     shell::{WaylandSurface, wlr_layer::LayerSurface},
     shm::slot::{Buffer, SlotPool},
 };

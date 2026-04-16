@@ -1,6 +1,9 @@
 use smithay_client_toolkit::{
     seat::pointer::{PointerEvent, PointerEventKind},
-    shell::wlr_layer::LayerSurface,
+    shell::{
+        WaylandSurface,
+        wlr_layer::{KeyboardInteractivity, LayerSurface},
+    },
     shm::slot::Buffer,
 };
 
@@ -50,10 +53,16 @@ impl Widget for TopBar {
         match pointer_event.kind {
             PointerEventKind::Enter { serial: _ } => {
                 self.hovered = true;
+                self.layer_surface
+                    .set_keyboard_interactivity(KeyboardInteractivity::OnDemand);
+                self.layer_surface.commit();
                 return true;
             }
             PointerEventKind::Leave { serial: _ } => {
                 self.hovered = false;
+                self.layer_surface
+                    .set_keyboard_interactivity(KeyboardInteractivity::None);
+                self.layer_surface.commit();
                 return true;
             }
             PointerEventKind::Motion { time: _ } => {}
@@ -61,12 +70,16 @@ impl Widget for TopBar {
                 time: _,
                 button: _,
                 serial: _,
-            } => {}
+            } => {
+                println!("Click pressed");
+            }
             PointerEventKind::Release {
                 time: _,
                 button: _,
                 serial: _,
-            } => {}
+            } => {
+                println!("Click released")
+            }
             PointerEventKind::Axis {
                 time: _,
                 horizontal: _,

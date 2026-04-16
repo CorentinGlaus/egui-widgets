@@ -9,14 +9,14 @@ use smithay_client_toolkit::{
     seat::SeatState,
     shell::{
         WaylandSurface,
-        wlr_layer::{Anchor, Layer, LayerShell},
+        wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerShell},
     },
     shm::{Shm, slot::SlotPool},
 };
 
 use crate::{
     app::{App, builder::AppBuilder},
-    widget::{Widget, top_bar::TopBar},
+    widget::top_bar::TopBar,
 };
 
 fn main() {
@@ -47,9 +47,7 @@ fn main() {
     layer_surface.set_size(0, 40);
 
     layer_surface.set_exclusive_zone(40);
-    layer_surface.set_keyboard_interactivity(
-        smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity::None,
-    );
+    layer_surface.set_keyboard_interactivity(KeyboardInteractivity::None);
 
     layer_surface.commit();
 
