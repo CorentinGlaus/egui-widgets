@@ -1,13 +1,9 @@
 use smithay_client_toolkit::{
-    compositor::CompositorState,
-    output::OutputState,
-    registry::RegistryState,
-    seat::SeatState,
+    compositor::CompositorState, output::OutputState, registry::RegistryState, seat::SeatState,
     shell::wlr_layer::LayerShell,
-    shm::{Shm, slot::SlotPool},
 };
 
-use crate::{app::App, widget::Widget};
+use crate::{app::App, egl::EglData, widget::Widget};
 
 pub struct AppBuilder {
     pub registry_state: RegistryState,
@@ -15,10 +11,10 @@ pub struct AppBuilder {
     pub output_state: OutputState,
     pub layer_shell: LayerShell,
     pub seat_state: SeatState,
-    pub shm: Shm,
+
+    pub egl_data: EglData,
 
     pub widgets: Vec<Box<dyn Widget>>,
-    pub pool: SlotPool,
 
     pub should_exit: bool,
 }
@@ -30,8 +26,7 @@ impl AppBuilder {
         output_state: OutputState,
         layer_shell: LayerShell,
         seat_state: SeatState,
-        shm: Shm,
-        slot_pool: SlotPool,
+        egl_data: EglData,
     ) -> AppBuilder {
         AppBuilder {
             registry_state,
@@ -39,9 +34,8 @@ impl AppBuilder {
             output_state,
             layer_shell,
             seat_state,
-            shm,
+            egl_data,
             widgets: Vec::new(),
-            pool: slot_pool,
             should_exit: false,
         }
     }
@@ -54,13 +48,12 @@ impl AppBuilder {
     pub fn build(self) -> App {
         App {
             registry_state: self.registry_state,
-            compositor_state: self.compositor_state,
+            _compositor_state: self.compositor_state,
             output_state: self.output_state,
-            layer_shell: self.layer_shell,
+            _layer_shell: self.layer_shell,
             seat_state: self.seat_state,
-            shm: self.shm,
+            egl_data: self.egl_data,
             widgets: self.widgets,
-            pool: self.pool,
             should_exit: self.should_exit,
         }
     }

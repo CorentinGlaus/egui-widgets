@@ -1,4 +1,5 @@
 mod app;
+mod egl;
 mod widget;
 
 use smithay_client_toolkit::{
@@ -11,16 +12,18 @@ use smithay_client_toolkit::{
         WaylandSurface,
         wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerShell},
     },
-    shm::{Shm, slot::SlotPool},
 };
 
 use crate::{
     app::{App, builder::AppBuilder},
+    egl::EglData,
     widget::top_bar::TopBar,
 };
 
 fn main() {
     let conn = Connection::connect_to_env().expect("Failed to connect to Wayland");
+
+    let egl_data = EglData::new(&conn);
 
     let (globals, mut event_queue) =
         registry_queue_init::<App>(&conn).expect("Failed to init registry");
@@ -32,10 +35,6 @@ fn main() {
     let layer_shell = LayerShell::bind(&globals, &qh).expect("Layer shell not available");
 
     let seat_state = SeatState::new(&globals, &qh);
-
-    let shm = Shm::bind(&globals, &qh).expect("Shm not available");
-
-    let pool = SlotPool::new(1024, &shm).expect("Failed to create SHM pool");
 
     let surface = compositor_state.create_surface(&qh);
 
@@ -53,10 +52,11 @@ fn main() {
 
     let top_bar = TopBar {
         layer_surface: layer_surface,
-        buffer: None,
         width: 0,
         height: 0,
         hovered: false,
+        egl_surface: None,
+        wl_egl_surface: None,
     };
 
     let mut app = AppBuilder::new(
@@ -65,8 +65,7 @@ fn main() {
         OutputState::new(&globals, &qh),
         layer_shell,
         seat_state,
-        shm,
-        pool,
+        egl_data,
     )
     .add_widget(Box::new(top_bar))
     .build();

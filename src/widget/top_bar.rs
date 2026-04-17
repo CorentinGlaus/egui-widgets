@@ -4,17 +4,20 @@ use smithay_client_toolkit::{
         WaylandSurface,
         wlr_layer::{KeyboardInteractivity, LayerSurface},
     },
-    shm::slot::Buffer,
 };
+
+use khronos_egl as egl;
+use wayland_egl::WlEglSurface;
 
 use crate::widget::Widget;
 
 pub struct TopBar {
     pub layer_surface: LayerSurface,
-    pub buffer: Option<Buffer>,
     pub width: u32,
     pub height: u32,
     pub hovered: bool,
+    pub egl_surface: Option<egl::Surface>,
+    pub wl_egl_surface: Option<WlEglSurface>,
 }
 
 impl Widget for TopBar {
@@ -29,24 +32,6 @@ impl Widget for TopBar {
     fn set_size(&mut self, width: u32, height: u32) {
         self.width = width;
         self.height = height;
-    }
-
-    fn render(&self, canvas: &mut [u8]) {
-        let (r, g, b) = if self.hovered {
-            (255, 100, 100)
-        } else {
-            (0, 180, 180)
-        };
-        for pixel in canvas.chunks_exact_mut(4) {
-            pixel[0] = b;
-            pixel[1] = g;
-            pixel[2] = r;
-            pixel[3] = 255;
-        }
-    }
-
-    fn store_buffer(&mut self, buffer: Buffer) {
-        self.buffer = Some(buffer);
     }
 
     fn handle_pointer_event(&mut self, pointer_event: &PointerEvent) -> bool {
@@ -88,5 +73,21 @@ impl Widget for TopBar {
             } => {}
         }
         false
+    }
+
+    fn egl_surface(&self) -> Option<khronos_egl::Surface> {
+        self.egl_surface
+    }
+
+    fn set_egl_surface(&mut self, egl_surface: khronos_egl::Surface) {
+        self.egl_surface = Some(egl_surface);
+    }
+
+    fn wl_egl_surface(&self) -> Option<&WlEglSurface> {
+        self.wl_egl_surface.as_ref()
+    }
+
+    fn set_wl_egl_surface(&mut self, wl_egl_surface: WlEglSurface) {
+        self.wl_egl_surface = Some(wl_egl_surface);
     }
 }

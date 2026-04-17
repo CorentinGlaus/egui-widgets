@@ -1,49 +1,55 @@
 pub mod top_bar;
 
-use smithay_client_toolkit::{
-    reexports::client::protocol::wl_shm,
-    seat::pointer::PointerEvent,
-    shell::{WaylandSurface, wlr_layer::LayerSurface},
-    shm::slot::{Buffer, SlotPool},
-};
+use glow::HasContext;
+use smithay_client_toolkit::{seat::pointer::PointerEvent, shell::wlr_layer::LayerSurface};
+
+use khronos_egl as egl;
+use wayland_egl::WlEglSurface;
+
+use crate::egl::EglData;
 
 pub trait Widget {
     fn layer_surface(&self) -> &LayerSurface;
     fn size(&self) -> (u32, u32);
     fn set_size(&mut self, width: u32, height: u32);
-    fn render(&self, canvas: &mut [u8]);
 
     /// Handles a pointer event and returns whether a redraw is needed.
     fn handle_pointer_event(&mut self, pointer_event: &PointerEvent) -> bool;
 
-    fn draw(&mut self, pool: &mut SlotPool) {
+    fn egl_surface(&self) -> Option<egl::Surface>;
+    fn set_egl_surface(&mut self, egl_surface: egl::Surface);
+    fn wl_egl_surface(&self) -> Option<&WlEglSurface>;
+    fn set_wl_egl_surface(&mut self, wl_egl_surface: WlEglSurface);
+
+    fn draw(&mut self, egl_data: &EglData) {
         let (width, height) = self.size();
         if width == 0 || height == 0 {
             return;
         }
 
-        // bytes per row, ARGB -> 4
-        let stride = width * 4;
-        let (buffer, canvas) = pool
-            .create_buffer(
-                width as i32,
-                height as i32,
-                stride as i32,
-                wl_shm::Format::Argb8888,
-            )
-            .expect("Failed to create buffer");
+        if let (Some(surface), Some(gl)) = (self.egl_surface(), &egl_data.gl) {
+            egl_data
+                .egl_instance
+                .make_current(
+                    egl_data.egl_display,
+                    Some(surface),
+                    Some(surface),
+                    Some(egl_data.egl_context),
+                )
+                .expect("Failed to set current");
 
-        self.render(canvas);
+            unsafe {
+                gl.viewport(0, 0, width as i32, height as i32);
+                gl.clear_color(0.0, 0.7, 0.7, 1.0);
+                gl.clear(glow::COLOR_BUFFER_BIT);
+            }
 
-        let surface = self.layer_surface();
-        let wl_surface = surface.wl_surface();
-
-        wl_surface.attach(Some(&buffer.wl_buffer()), 0, 0);
-        wl_surface.damage_buffer(0, 0, width as i32, height as i32);
-        wl_surface.commit();
-
-        self.store_buffer(buffer);
+            if self.egl_surface().is_some() {
+                egl_data
+                    .egl_instance
+                    .swap_buffers(egl_data.egl_display, surface)
+                    .expect("Failed to swap buffer");
+            }
+        }
     }
-
-    fn store_buffer(&mut self, buffer: Buffer);
 }

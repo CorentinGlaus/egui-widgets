@@ -1,12 +1,13 @@
 pub mod builder;
 
+use khronos_egl as egl;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
-    delegate_registry, delegate_seat, delegate_shm,
+    delegate_registry, delegate_seat,
     output::{OutputHandler, OutputState},
     reexports::client::{
-        Connection, QueueHandle,
+        Connection, Proxy, QueueHandle,
         protocol::{wl_output, wl_surface},
     },
     registry::{ProvidesRegistryState, RegistryState},
@@ -20,24 +21,24 @@ use smithay_client_toolkit::{
         WaylandSurface,
         wlr_layer::{LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
     },
-    shm::{Shm, ShmHandler, slot::SlotPool},
 };
+use wayland_egl::WlEglSurface;
 
-use crate::widget::Widget;
+use crate::{egl::EglData, widget::Widget};
 
 pub struct App {
     pub registry_state: RegistryState,
-    pub compositor_state: CompositorState,
     pub output_state: OutputState,
-    pub shm: Shm,
-    pub layer_shell: LayerShell,
     pub seat_state: SeatState,
-
-    pub pool: SlotPool,
+    pub egl_data: EglData,
 
     pub widgets: Vec<Box<dyn Widget>>,
 
     pub should_exit: bool,
+    
+    // Needed to keep alive
+    pub _compositor_state: CompositorState,
+    pub _layer_shell: LayerShell,
 }
 
 impl App {
@@ -69,7 +70,53 @@ impl LayerShellHandler for App {
     ) {
         if let Some(widget) = Self::find_widget(&mut self.widgets, layer_surface.wl_surface()) {
             widget.set_size(configure.new_size.0, configure.new_size.1);
-            widget.draw(&mut self.pool);
+
+            let (width, height) = widget.size();
+
+            if widget.wl_egl_surface().is_none() {
+                let wl_egl_surface =
+                    WlEglSurface::new(layer_surface.wl_surface().id(), width as i32, height as i32)
+                        .expect("Failed to create WL EGL Surface");
+
+                let egl_surface = unsafe {
+                    self.egl_data
+                        .egl_instance
+                        .create_platform_window_surface(
+                            self.egl_data.egl_display,
+                            self.egl_data.egl_config,
+                            wl_egl_surface.ptr() as *mut std::ffi::c_void,
+                            &[egl::ATTRIB_NONE],
+                        )
+                        .expect("Failed to create EGL Surface")
+                };
+
+                widget.set_wl_egl_surface(wl_egl_surface);
+                widget.set_egl_surface(egl_surface);
+
+                self.egl_data
+                    .egl_instance
+                    .make_current(
+                        self.egl_data.egl_display,
+                        Some(egl_surface),
+                        Some(egl_surface),
+                        Some(self.egl_data.egl_context),
+                    )
+                    .expect("Failed to set current");
+
+                if self.egl_data.gl.is_none() {
+                    self.egl_data.gl = Some(unsafe {
+                        glow::Context::from_loader_function(|s| {
+                            self.egl_data
+                                .egl_instance
+                                .get_proc_address(s)
+                                .map(|f| f as *const std::ffi::c_void)
+                                .unwrap_or(std::ptr::null())
+                        })
+                    });
+                }
+            }
+
+            widget.draw(&self.egl_data);
         }
     }
 }
@@ -101,7 +148,7 @@ impl CompositorHandler for App {
         _time: u32,
     ) {
         if let Some(widget) = Self::find_widget(&mut self.widgets, layer_surface) {
-            widget.draw(&mut self.pool);
+            widget.draw(&self.egl_data);
         }
     }
 
@@ -151,12 +198,6 @@ impl OutputHandler for App {
         _qh: &QueueHandle<Self>,
         _output: wl_output::WlOutput,
     ) {
-    }
-}
-
-impl ShmHandler for App {
-    fn shm_state(&mut self) -> &mut Shm {
-        &mut self.shm
     }
 }
 
@@ -230,7 +271,7 @@ impl PointerHandler for App {
         for event in events {
             if let Some(widget) = Self::find_widget(&mut self.widgets, &event.surface) {
                 if widget.handle_pointer_event(event) {
-                    widget.draw(&mut self.pool);
+                    widget.draw(&self.egl_data);
                 }
             }
         }
@@ -312,7 +353,6 @@ delegate_compositor!(App);
 delegate_layer!(App);
 delegate_output!(App);
 delegate_registry!(App);
-delegate_shm!(App);
 delegate_pointer!(App);
 delegate_seat!(App);
 delegate_keyboard!(App);
