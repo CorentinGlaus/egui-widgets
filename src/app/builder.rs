@@ -13,6 +13,7 @@ pub struct AppBuilder {
     pub seat_state: SeatState,
 
     pub egl_data: EglData,
+    painter: Option<egui_glow::Painter>,
 
     pub widgets: Vec<Box<dyn Widget>>,
 
@@ -35,6 +36,7 @@ impl AppBuilder {
             layer_shell,
             seat_state,
             egl_data,
+            painter: None,
             widgets: Vec::new(),
             should_exit: false,
         }
@@ -53,8 +55,10 @@ impl AppBuilder {
             _layer_shell: self.layer_shell,
             seat_state: self.seat_state,
             egl_data: self.egl_data,
+            painter: self.painter,
             widgets: self.widgets,
             should_exit: self.should_exit,
+            selected_widget: None,
         }
     }
 }

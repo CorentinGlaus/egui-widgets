@@ -50,14 +50,7 @@ fn main() {
 
     layer_surface.commit();
 
-    let top_bar = TopBar {
-        layer_surface: layer_surface,
-        width: 0,
-        height: 0,
-        hovered: false,
-        egl_surface: None,
-        wl_egl_surface: None,
-    };
+    let top_bar = TopBar::new(layer_surface);
 
     let mut app = AppBuilder::new(
         RegistryState::new(&globals),

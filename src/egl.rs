@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use khronos_egl as egl;
 use smithay_client_toolkit::reexports::client::Connection;
 
@@ -6,7 +8,7 @@ pub struct EglData {
     pub egl_display: egl::Display,
     pub egl_config: egl::Config,
     pub egl_context: egl::Context,
-    pub gl: Option<glow::Context>,
+    pub gl: Option<Arc<glow::Context>>,
 }
 
 impl EglData {

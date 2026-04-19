@@ -1,5 +1,7 @@
 pub mod builder;
 
+use std::sync::Arc;
+
 use khronos_egl as egl;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
@@ -31,11 +33,13 @@ pub struct App {
     pub output_state: OutputState,
     pub seat_state: SeatState,
     pub egl_data: EglData,
+    painter: Option<egui_glow::Painter>,
 
     pub widgets: Vec<Box<dyn Widget>>,
+    selected_widget: Option<usize>,
 
     pub should_exit: bool,
-    
+
     // Needed to keep alive
     pub _compositor_state: CompositorState,
     pub _layer_shell: LayerShell,
@@ -52,6 +56,29 @@ impl App {
             }
         }
         None
+    }
+
+    fn find_widget_index(&self, layer_surface: &wl_surface::WlSurface) -> Option<usize> {
+        return self
+            .widgets
+            .iter()
+            .position(|w| w.layer_surface().wl_surface() == layer_surface);
+    }
+
+    fn focused_widget(&mut self) -> Option<&mut Box<dyn Widget>> {
+        if self.selected_widget.is_some() {
+            self.widgets.get_mut(self.selected_widget.unwrap())
+        } else {
+            None
+        }
+    }
+
+    fn draw_widget(&mut self, layer_surface: &wl_surface::WlSurface) {
+        if let Some(widget) = Self::find_widget(&mut self.widgets, layer_surface) {
+            if let Some(ref mut painter) = self.painter {
+                widget.draw_widget(&self.egl_data, painter);
+            }
+        }
     }
 }
 
@@ -104,7 +131,7 @@ impl LayerShellHandler for App {
                     .expect("Failed to set current");
 
                 if self.egl_data.gl.is_none() {
-                    self.egl_data.gl = Some(unsafe {
+                    self.egl_data.gl = Some(Arc::new(unsafe {
                         glow::Context::from_loader_function(|s| {
                             self.egl_data
                                 .egl_instance
@@ -112,12 +139,21 @@ impl LayerShellHandler for App {
                                 .map(|f| f as *const std::ffi::c_void)
                                 .unwrap_or(std::ptr::null())
                         })
-                    });
+                    }));
+
+                    self.painter = Some(
+                        egui_glow::Painter::new(
+                            Arc::clone(self.egl_data.gl.as_ref().unwrap()),
+                            "",
+                            None,
+                            false,
+                        )
+                        .expect("Failed to create egui painter"),
+                    );
                 }
             }
-
-            widget.draw(&self.egl_data);
         }
+        self.draw_widget(layer_surface.wl_surface());
     }
 }
 
@@ -147,9 +183,7 @@ impl CompositorHandler for App {
         layer_surface: &wl_surface::WlSurface,
         _time: u32,
     ) {
-        if let Some(widget) = Self::find_widget(&mut self.widgets, layer_surface) {
-            widget.draw(&self.egl_data);
-        }
+        self.draw_widget(layer_surface);
     }
 
     fn surface_enter(
@@ -270,10 +304,9 @@ impl PointerHandler for App {
     ) {
         for event in events {
             if let Some(widget) = Self::find_widget(&mut self.widgets, &event.surface) {
-                if widget.handle_pointer_event(event) {
-                    widget.draw(&self.egl_data);
-                }
+                widget.handle_pointer_event(event);
             }
+            self.draw_widget(&event.surface);
         }
     }
 }
@@ -284,12 +317,12 @@ impl KeyboardHandler for App {
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
         _keyboard: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
-        _surface: &wl_surface::WlSurface,
+        surface: &wl_surface::WlSurface,
         _serial: u32,
         _raw: &[u32],
         _keysyms: &[smithay_client_toolkit::seat::keyboard::Keysym],
     ) {
-        println!("Focus keyboard entered");
+        self.selected_widget = self.find_widget_index(surface);
     }
 
     fn leave(
@@ -297,10 +330,12 @@ impl KeyboardHandler for App {
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
         _keyboard: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
-        _surface: &wl_surface::WlSurface,
+        surface: &wl_surface::WlSurface,
         _serial: u32,
     ) {
-        println!("Focus keyboard left");
+        if self.selected_widget == self.find_widget_index(surface) {
+            self.selected_widget = None;
+        }
     }
 
     fn press_key(
@@ -311,7 +346,9 @@ impl KeyboardHandler for App {
         _serial: u32,
         event: smithay_client_toolkit::seat::keyboard::KeyEvent,
     ) {
-        println!("Key pressed: {:?}, utf8: {:?}", event.keysym, event.utf8);
+        if let Some(widget) = self.focused_widget() {
+            widget.handle_keyboard_event(&event);
+        }
     }
 
     fn repeat_key(
@@ -330,9 +367,8 @@ impl KeyboardHandler for App {
         _qh: &QueueHandle<Self>,
         _keyboard: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
         _serial: u32,
-        event: smithay_client_toolkit::seat::keyboard::KeyEvent,
+        _event: smithay_client_toolkit::seat::keyboard::KeyEvent,
     ) {
-        println!("Key released: {:?}, utf8: {:?}", event.keysym, event.utf8);
     }
 
     fn update_modifiers(
@@ -345,7 +381,9 @@ impl KeyboardHandler for App {
         _raw_modifiers: smithay_client_toolkit::seat::keyboard::RawModifiers,
         _layout: u32,
     ) {
-        println!("Modifiers: {:?}", modifiers);
+        if let Some(widget) = self.focused_widget() {
+            widget.handle_keyboard_modifiers(&modifiers);
+        }
     }
 }
 
